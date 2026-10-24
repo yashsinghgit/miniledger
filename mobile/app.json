@@ -1,1 +1,19 @@
-{"expo":{"name":"MiniLedger","slug":"miniledger","version":"1.0.0","orientation":"portrait","userInterfaceStyle":"light","splash":{"resizeMode":"contain","backgroundColor":"#f7f8fc"},"android":{"package":"com.miniledger.app"}}}
+{
+  "expo": {
+    "name": "MiniLedger",
+    "slug": "miniledger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f7f8fc"
+    },
+    "android": {
+      "package": "com.miniledger.app"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}

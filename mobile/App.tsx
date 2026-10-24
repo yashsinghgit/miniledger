@@ -10,8 +10,9 @@ import {
   Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import * as ImagePicker from "expo-image-picker";
 
-const API_BASE_URL = 'http://10.50.117.246:4000';
+const API_BASE_URL = 'http://10.165.103.246:4000';
 
 type Loan = {
   id: string;
@@ -30,12 +31,12 @@ export default function App() {
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [loans, setLoans] = useState<Loan[]>([]);
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState("");
   const [summary, setSummary] = useState({
     totalLent: 0,
     totalRepaid: 0,
     overdueAmount: 0,
-  })
+  });
 
   const totalLent = loans.reduce((sum, loan) => sum + loan.amount, 0);
   const totalRepaid = loans
@@ -46,172 +47,228 @@ export default function App() {
     .filter((loan) => !loan.repaidAt && new Date(loan.dueDate) < new Date())
     .reduce((sum, loan) => sum + loan.amount, 0);
 
-  
-
-const requestOtp = async () => {
-  if (!/^\+?[1-9]\d{9,14}$/.test(phone)) {
-    Alert.alert('Invalid phone number', 'Enter a valid phone number and try again.');
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/auth/request-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Could not request OTP');
+  const requestOtp = async () => {
+    if (!/^\+?[1-9]\d{9,14}$/.test(phone)) {
+      Alert.alert(
+        "Invalid phone number",
+        "Enter a valid phone number and try again.",
+      );
+      return;
     }
 
-    setOtp('');
-    setShowOtp(true);
-    Alert.alert('OTP requested', 'Check the backend terminal for the latest demo OTP.');
-  } catch (error) {
-    Alert.alert(
-      'Could not send OTP',
-      error instanceof Error ? error.message : 'Please try again.',
-    );
-  }
-};
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/request-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
 
+      const data = await response.json();
 
-const verifyOtp = async () => {
-  if (!/^\d{6}$/.test(otp)) {
-    Alert.alert('Invalid OTP', 'Enter the 6-digit OTP and try again.');
-    return;
-  }
+      if (!response.ok) {
+        throw new Error(data.error || "Could not request OTP");
+      }
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, otp }),
-    });
+      setOtp("");
+      setShowOtp(true);
+      Alert.alert(
+        "OTP requested",
+        "Check the backend terminal for the latest demo OTP.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "Could not send OTP",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    }
+  };
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      setOtp('');
-      throw new Error(data.error || 'Incorrect or expired OTP. Please try again.');
+  const verifyOtp = async () => {
+    if (!/^\d{6}$/.test(otp)) {
+      Alert.alert("Invalid OTP", "Enter the 6-digit OTP and try again.");
+      return;
     }
 
-    setToken(data.token);
-    setLoggedIn(true);
-  } catch (error) {
-    Alert.alert(
-      'Verification failed',
-      error instanceof Error ? error.message : 'Please try again.',
-    );
-  }
-};
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, otp }),
+      });
 
+      const data = await response.json();
 
+      if (!response.ok) {
+        setOtp("");
+        throw new Error(
+          data.error || "Incorrect or expired OTP. Please try again.",
+        );
+      }
 
-const addLoan = async () => {
-  const numericAmount = Number(amount);
+      setToken(data.token);
+      setLoggedIn(true);
+    } catch (error) {
+      Alert.alert(
+        "Verification failed",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    }
+  };
 
-  if (!friendName.trim() || !Number.isFinite(numericAmount) ||
-      numericAmount <= 0 || !dueDate) {
-    Alert.alert('Missing details', 'Enter a friend, valid amount, and due date.');
-    return;
-  }
+  const addLoan = async () => {
+    const numericAmount = Number(amount);
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) ||
-      Number.isNaN(Date.parse(`${dueDate}T00:00:00`))) {
-    Alert.alert('Invalid date', 'Use YYYY-MM-DD.');
-    return;
-  }
+    if (
+      !friendName.trim() ||
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0 ||
+      !dueDate
+    ) {
+      Alert.alert(
+        "Missing details",
+        "Enter a friend, valid amount, and due date.",
+      );
+      return;
+    }
 
-  try {
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) ||
+      Number.isNaN(Date.parse(`${dueDate}T00:00:00`))
+    ) {
+      Alert.alert("Invalid date", "Use YYYY-MM-DD.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/loans`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          friendName: friendName.trim(),
+          amount: numericAmount,
+          dueDate,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not add loan");
+
+      setFriendName("");
+      setAmount("");
+      setDueDate("");
+      await refreshData();
+    } catch (error) {
+      Alert.alert("Could not add loan", String(error));
+    }
+  };
+
+  const markRepaid = async (id: string) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/loans/${encodeURIComponent(id)}/repay`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Could not mark as repaid");
+
+      await refreshData();
+    } catch (error) {
+      Alert.alert("Repayment failed", String(error));
+    }
+  };
+
+  const pickAndUploadReceipt = async (loanId: string) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.7,
+      });
+
+      if (result.canceled) return;
+
+      const image = result.assets[0];
+      const formData = new FormData();
+
+      formData.append("receipt", {
+        uri: image.uri,
+        name: image.fileName || `receipt-${Date.now()}.jpg`,
+        type: image.mimeType || "image/jpeg",
+      } as any);
+
+      const response = await fetch(
+        `${API_BASE_URL}/loans/${encodeURIComponent(loanId)}/receipt`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Receipt upload failed");
+      }
+
+      Alert.alert("Success", "Receipt uploaded successfully!");
+      await refreshData();
+    } catch (error) {
+      Alert.alert(
+        "Upload failed",
+        error instanceof Error ? error.message : "Could not upload receipt",
+      );
+    }
+  };
+
+  const loadLoans = async () => {
     const response = await fetch(`${API_BASE_URL}/loans`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        friendName: friendName.trim(),
-        amount: numericAmount,
-        dueDate,
-      }),
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Could not add loan');
+    if (!response.ok) throw new Error(data.error || "Could not load loans");
 
-    setFriendName('');
-    setAmount('');
-    setDueDate('');
-    await refreshData();
-  } catch (error) {
-    Alert.alert('Could not add loan', String(error));
-  }
-};
+    setLoans(data);
+  };
 
-  
-const markRepaid = async (id: string) => {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/loans/${encodeURIComponent(id)}/repay`,
-      {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
+  const loadSummary = async () => {
+    const response = await fetch(`${API_BASE_URL}/summary`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Could not mark as repaid');
 
-    await refreshData();    
-  } catch (error) {
-    Alert.alert('Repayment failed', String(error));
-  }
-};
- 
-const loadLoans = async () => {
-  const response = await fetch(`${API_BASE_URL}/loans`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+    if (!response.ok) {
+      throw new Error(data.error || "Could not load summary");
+    }
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Could not load loans');
-  
-  setLoans(data);
-};
+    setSummary(data);
+  };
 
-const loadSummary = async () => {
+  const refreshData = async () => {
+    try {
+      await Promise.all([loadLoans(), loadSummary()]);
+    } catch (error) {
+      Alert.alert("Refresh failed", String(error));
+    }
+  };
 
-  const response = await fetch(`${API_BASE_URL}/summary`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Could not load summary');
-  }
-
-  setSummary(data);
-};
-
-const refreshData = async () => {
-
-  try {
-    await Promise.all([loadLoans(), loadSummary()]);
-  } catch (error) {
-    Alert.alert('Refresh failed', String(error));
-  }
-};
-
-useEffect(() => {
-  if (loggedIn && token) {
-    refreshData();
-  }
-}, [loggedIn, token]);
+  useEffect(() => {
+    if (loggedIn && token) {
+      refreshData();
+    }
+  }, [loggedIn, token]);
 
   if (!loggedIn) {
     return (
@@ -229,26 +286,30 @@ useEffect(() => {
             onChangeText={setPhone}
           />
           {showOtp && (
-            <><>
-              <Text style={styles.label}>6-DIGIT OTP</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter OTP"
-                keyboardType="number-pad"
-                maxLength={6}
-                value={otp}
-                onChangeText={setOtp} />
-            </><TouchableOpacity
-              onPress={() => {
-                setOtp('');
-                setShowOtp(false);
-              } }
-              style={{ alignSelf: 'flex-start', marginBottom: 12 }}
-            >
-                <Text style={{ color: '#1C5744', fontWeight: '600' }}>
+            <>
+              <>
+                <Text style={styles.label}>6-DIGIT OTP</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter OTP"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={otp}
+                  onChangeText={setOtp}
+                />
+              </>
+              <TouchableOpacity
+                onPress={() => {
+                  setOtp("");
+                  setShowOtp(false);
+                }}
+                style={{ alignSelf: "flex-start", marginBottom: 12 }}
+              >
+                <Text style={{ color: "#1C5744", fontWeight: "600" }}>
                   Change phone number
                 </Text>
-              </TouchableOpacity></>
+              </TouchableOpacity>
+            </>
           )}
           <TouchableOpacity
             style={styles.primaryButton}
@@ -277,7 +338,9 @@ useEffect(() => {
           <View style={styles.statsRow}>
             <View>
               <Text style={styles.statLabel}>Repaid</Text>
-              <Text style={styles.statValue}>₹{summary.totalRepaid.toFixed(2)}</Text>
+              <Text style={styles.statValue}>
+                ₹{summary.totalRepaid.toFixed(2)}
+              </Text>
             </View>
             <View>
               <Text style={styles.statLabel}>Overdue</Text>
@@ -352,6 +415,14 @@ useEffect(() => {
                     </Text>
                   </TouchableOpacity>
                 )}
+                 <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={() => pickAndUploadReceipt(loan.id)}
+                    >
+                      <Text style={styles.secondaryButtonText}>
+                        Upload Receipt
+                      </Text>
+                    </TouchableOpacity>
               </View>
             );
           })

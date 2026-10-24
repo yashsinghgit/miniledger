@@ -3,11 +3,38 @@ import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 export const app = express();
 export const prisma = new PrismaClient();
 
 app.use(express.json());
+
+const uploadDir = path.join(process.cwd(), 'uploads');
+fs.mkdirSync(uploadDir, { recursive: true });
+
+app.use('/uploads', express.static(uploadDir));
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+
+const receiptUpload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      return cb(new Error('Only JPG, PNG, or WEBP images are allowed'));
+    }
+    cb(null, true);
+  },
+});
 
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -133,10 +160,7 @@ app.get('/loans', auth, async (req: AuthRequest, res: Response) => {
 });
 
 
-app.patch(
-  '/loans/:id/repay',
-  auth,
-  async (req: AuthRequest, res: Response) => {
+app.patch('/loans/:id/repay',auth,async (req: AuthRequest, res: Response) => {
     try {
       const loan = await prisma.loan.findFirst({
         where: {
@@ -170,6 +194,55 @@ app.patch(
       return res.status(500).json({
         error: 'Could not mark loan as repaid',
       });
+    }
+  },
+);
+
+app.post(
+  '/loans/:id/receipt',
+  auth,
+  (req: AuthRequest, res: Response, next: NextFunction) => {
+    receiptUpload.single('receipt')(req, res, (error) => {
+      if (error) {
+        return res.status(400).json({
+          error: error.message || 'Receipt upload failed',
+        });
+      }
+      next();
+    });
+  },
+  async (req: AuthRequest, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Choose a receipt image' });
+    }
+
+    try {
+      const loan = await prisma.loan.findFirst({
+        where: { id: req.params.id as string, userId: req.userId },
+      });
+
+      if (!loan) {
+        fs.unlinkSync(req.file.path);
+        return res.status(404).json({ error: 'Loan not found' });
+      }
+
+      const receiptPath = `/uploads/${req.file.filename}`;
+
+      const updated = await prisma.loan.update({
+        where: { id: loan.id },
+        data: { receiptPath },
+      });
+
+      return res.json({
+        message: 'Receipt uploaded successfully',
+        receiptPath: updated.receiptPath,
+      });
+    } catch (error) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      console.error('Receipt upload failed:', error);
+      return res.status(500).json({ error: 'Could not save receipt' });
     }
   },
 );

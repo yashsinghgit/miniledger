@@ -20,6 +20,7 @@ model Loan {
   amount    Decimal   @db.Decimal(12, 2)
   dueDate   DateTime
   repaidAt  DateTime?
+  receiptPath String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   userId    String
